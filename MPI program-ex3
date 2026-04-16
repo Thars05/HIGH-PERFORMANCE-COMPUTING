@@ -1,0 +1,63 @@
+#include <mpi.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+
+int main() {
+    int my_rank, comm_sz, n, num;
+    int *arr = NULL, *sub;
+    int sub_size;
+    int local_count = 0, total_count = 0;
+
+    MPI_Init(NULL, NULL);
+    MPI_Comm_size(MPI_COMM_WORLD, &comm_sz);
+    MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+
+    if (my_rank == 0) {
+        printf("Enter length of array: ");
+        fflush(stdout);
+        scanf("%d", &n);
+        arr = (int*)malloc(n * sizeof(int));
+        srand(time(NULL));
+        for (int i = 0; i < n; i++) {
+            arr[i] = rand()%10;
+            printf("%d ", arr[i]);
+        }
+        printf("\nEnter the element to search: ");
+        fflush(stdout);
+        scanf("%d", &num);
+    }
+    MPI_Bcast(&n, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&num, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    int *sendcounts = malloc(comm_sz * sizeof(int));
+    int *displs = malloc(comm_sz * sizeof(int));
+    for (int i = 0; i < comm_sz; i++) {
+        sendcounts[i] = n / comm_sz;
+        if (i < n % comm_sz) {
+            sendcounts[i]++;
+        }
+        displs[i] = (i == 0) ? 0 : displs[i - 1] + sendcounts[i - 1];
+    }
+
+    sub = (int*)malloc(sendcounts[my_rank] * sizeof(int));
+    MPI_Scatterv(arr, sendcounts, displs, MPI_INT, sub, sendcounts[my_rank], MPI_INT, 0, MPI_COMM_WORLD);
+    for (int i = 0; i < sendcounts[my_rank]; i++) {
+        if (sub[i] == num) {
+            local_count++;
+        }
+    }
+    MPI_Reduce(&local_count, &total_count, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
+    if (my_rank == 0) {
+        printf("Frequency of %d is %d\n", num, total_count);
+    }
+    if (my_rank == 0) {
+        free(arr);
+    }
+    free(sub);
+    free(sendcounts);
+    free(displs);
+
+    MPI_Finalize();
+
+}
+
